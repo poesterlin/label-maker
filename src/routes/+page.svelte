@@ -11,7 +11,7 @@
 	const BOARD_STORAGE_KEY = 'label-maker:board:v1';
 	const DESIGN_WIDTH = 900;
 	const DESIGN_HEIGHT = 520;
-	const DEFAULT_FONT_FAMILY = 'Inter, system-ui, sans-serif';
+	const DEFAULT_FONT_FAMILY = 'Georgia, "Times New Roman", serif';
 	const DEFAULT_FONT_STYLE = 'normal';
 	const DEFAULT_TEXT_ALIGN = 'left';
 	const DEFAULT_VERTICAL_ALIGN = 'top';
@@ -34,6 +34,7 @@
 
 	let stageHost = $state<HTMLDivElement>();
 	let stageHostWidth = $state(0);
+	const stageScale = $derived(stageHostWidth > 0 ? Math.min(1, stageHostWidth / DESIGN_WIDTH) : 1);
 	let selectedId = $state<number | null>(1);
 	let items = $state<LabelItem[]>([
 		{
@@ -44,7 +45,7 @@
 			fontSize: 44,
 			fontFamily: DEFAULT_FONT_FAMILY,
 			fontStyle: DEFAULT_FONT_STYLE,
-			fill: '#111827',
+			fill: '#3d2c20',
 			width: 320,
 			height: DEFAULT_HEIGHT,
 			align: DEFAULT_TEXT_ALIGN,
@@ -58,7 +59,7 @@
 			fontSize: 22,
 			fontFamily: DEFAULT_FONT_FAMILY,
 			fontStyle: DEFAULT_FONT_STYLE,
-			fill: '#374151',
+			fill: '#6b5e50',
 			width: 260,
 			height: DEFAULT_HEIGHT,
 			align: DEFAULT_TEXT_ALIGN,
@@ -67,6 +68,8 @@
 	]);
 
 	let nextId = $state(3);
+	// Keep Konva instances non-reactive. Using `$state` here makes the setup
+	// effect read and write the same signal (`stage`), which can recurse.
 	let stage: Konva.Stage | undefined;
 	let layer: Konva.Layer | undefined;
 	let transformer: Konva.Transformer | undefined;
@@ -95,7 +98,7 @@
 	let bulkFontFamily = $state(DEFAULT_FONT_FAMILY);
 	let bulkFontStyle = $state('bold');
 	let bulkAlign = $state<'left' | 'center' | 'right'>('center');
-	let bulkFill = $state('#111827');
+	let bulkFill = $state('#3d2c20');
 	let bulkPreviewIndex = $state(0);
 
 	let _savedBasicSelectedId = $state<number | null>(null);
@@ -126,7 +129,6 @@
 			browserRequirements: 'Web Bluetooth support (Chrome or Edge)'
 		})
 	);
-
 
 	type PersistedBoard = {
 		selectedId: number | null;
@@ -204,7 +206,7 @@
 			fontSize: 28,
 			fontFamily: DEFAULT_FONT_FAMILY,
 			fontStyle: DEFAULT_FONT_STYLE,
-			fill: '#111827',
+			fill: '#3d2c20',
 			width: 240,
 			height: DEFAULT_HEIGHT,
 			align: DEFAULT_TEXT_ALIGN,
@@ -541,7 +543,6 @@
 			items = parsed.items.map(normalizeLabelItem);
 			nextId = parsed.nextId;
 		} catch {
-			// Ignore invalid persisted data and continue with defaults.
 		} finally {
 			hasRestoredBoard = true;
 		}
@@ -576,7 +577,7 @@
 		transformer = new Konva.Transformer({
 			rotateEnabled: false,
 			keepRatio: false,
-			enabledAnchors: ['middle-left', 'middle-right', 'middle-top', 'middle-bottom']
+			enabledAnchors: ['middle-left', 'middle-right', 'top-center', 'bottom-center']
 		});
 
 		const bg = new Konva.Rect({
@@ -587,14 +588,22 @@
 			name: 'board-frame',
 			radius: 18,
 			fill: '#fffdfa',
-			stroke: '#d6d3d1',
+			stroke: '#e8e0d5',
 			strokeWidth: 2,
-			shadowColor: 'rgba(15, 23, 42, 0.12)',
+			shadowColor: 'rgba(61, 44, 32, 0.10)',
 			shadowBlur: 24,
 			shadowOffsetY: 10
 		});
 
 		layer.add(bg);
+
+		stage.on('click tap', (e) => {
+			if (e.target === stage || e.target.name() === 'board-frame') {
+				untrack(() => { selectedId = null; toolbarVisible = false; });
+				transformer?.nodes([]);
+				layer?.batchDraw();
+			}
+		});
 
 		for (const item of initialItems) {
 			const node = new Konva.Text({
@@ -759,13 +768,11 @@
 	$effect(() => {
 		if (!stage || !layer || stageHostWidth <= 0) return;
 
-		const scale = Math.min(1, stageHostWidth / DESIGN_WIDTH);
-
 		stage.size({
-			width: DESIGN_WIDTH * scale,
-			height: DESIGN_HEIGHT * scale
+			width: DESIGN_WIDTH * stageScale,
+			height: DESIGN_HEIGHT * stageScale
 		});
-		stage.scale({ x: scale, y: scale });
+		stage.scale({ x: stageScale, y: stageScale });
 		layer.batchDraw();
 		requestAnimationFrame(() => updateToolbarPosition());
 	});
@@ -784,6 +791,7 @@
 </svelte:head>
 
 <svelte:window onkeydown={handleKeydown} />
+<svelte:document onclick={(e) => { if (stageHost && !stageHost.contains(e.target as Node)) deselect(); }} />
 
 <div class="shell">
 	<CanvasCard
@@ -807,7 +815,7 @@
 		{editY}
 		{editWidth}
 		{editHeight}
-		stageScale={stage?.scaleX() ?? 1}
+		{stageScale}
 		{bulkLines}
 		onStageHost={(el) => (stageHost = el)}
 		onSwitchMode={switchMode}
@@ -857,27 +865,35 @@
 <style>
 	:global(body) {
 		margin: 0;
-		font-family: Inter, system-ui, sans-serif;
-		background: #f3f4f6;
-		color: #111827;
+		font-family: Georgia, "Times New Roman", serif;
+		background: #faf8f5;
+		color: #3d2c20;
+	}
+
+	:global(button) {
+		font-family: Georgia, "Times New Roman", serif;
+	}
+
+	:global(select, textarea, input) {
+		font-family: Georgia, "Times New Roman", serif;
 	}
 
 	.shell {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) 260px;
-		gap: 1rem;
-		padding: 1rem;
+		grid-template-columns: minmax(0, 1fr) 268px;
+		gap: 1.25rem;
+		padding: 1.25rem;
 		min-height: 100vh;
 		box-sizing: border-box;
 	}
 
 	.panel {
-		background: white;
-		border: 1px solid #e5e7eb;
-		border-radius: 20px;
-		padding: 1rem;
+		background: #fffefa;
+		border: 1px solid #e8e0d5;
+		border-radius: 18px;
+		padding: 1.25rem;
 		min-width: 0;
-		box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+		box-shadow: 0 2px 0 0 rgba(139, 90, 43, 0.06), 0 8px 30px rgba(61, 44, 32, 0.06);
 		display: grid;
 		gap: 0.9rem;
 		align-content: start;
@@ -885,48 +901,49 @@
 
 	.printer-info {
 		margin-top: 0.2rem;
-		padding: 0.75rem;
-		border: 1px solid #e5e7eb;
+		padding: 0.85rem;
+		border: 1px solid #e0d0bd;
 		border-radius: 12px;
-		background: #f0f9ff;
+		background: linear-gradient(135deg, #fefaf3, #fdf6ec);
 	}
 
 	.printer-info-title {
-		margin: 0 0 0.35rem;
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: #374151;
+		margin: 0 0 0.3rem;
+		font-size: 0.72rem;
+		font-weight: 700;
+		color: #8b5a2b;
 		text-transform: uppercase;
-		letter-spacing: 0.04em;
+		letter-spacing: 0.06em;
 	}
 
 	.printer-info-text {
 		margin: 0 0 0.5rem;
 		font-size: 0.8rem;
-		color: #4b5563;
-		line-height: 1.45;
+		color: #5c4a3a;
+		line-height: 1.5;
 	}
 
 	.printer-link {
 		font-size: 0.8rem;
-		color: #2563eb;
+		color: #b85c38;
 		text-decoration: none;
-		font-weight: 500;
+		font-weight: 600;
 	}
 
 	.printer-link:hover {
 		text-decoration: underline;
+		color: #9a4b2d;
 	}
 
 	@media (max-width: 900px) {
 		.shell {
 			grid-template-columns: 1fr;
-			padding: 0.75rem;
-			gap: 0.75rem;
+			padding: 0.85rem;
+			gap: 0.85rem;
 		}
 
 		.panel {
-			padding: 0.9rem;
+			padding: 1rem;
 			border-radius: 16px;
 			gap: 0.75rem;
 		}

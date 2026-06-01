@@ -131,12 +131,12 @@
 			{#if mode === 'basic'}
 				<button class="print-btn" onclick={onPrintCurrentLabel} disabled={printing}>
 					<IconPrinter size={16} />
-					{printing ? 'Printing...' : 'Print label'}
+					<span>{printing ? 'Printing...' : 'Print label'}</span>
 				</button>
 			{:else}
 				<button class="print-btn" onclick={onPrintBulkLabels} disabled={printing || bulkLines.length === 0}>
 					<IconPrinter size={16} />
-					{printing ? 'Printing...' : `Print all (${bulkLines.length})`}
+					<span>{printing ? 'Printing...' : `Print all (${bulkLines.length})`}</span>
 				</button>
 			{/if}
 		</div>
@@ -232,18 +232,18 @@
 
 <style>
 	.canvas-card {
-		background: white;
-		border: 1px solid #e5e7eb;
-		border-radius: 20px;
-		padding: 1rem;
+		background: #fffefa;
+		border: 1px solid #e8e0d5;
+		border-radius: 18px;
+		padding: 1.25rem;
 		min-width: 0;
-		box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+		box-shadow: 0 2px 0 0 rgba(139, 90, 43, 0.06), 0 8px 30px rgba(61, 44, 32, 0.06);
 	}
 
 	.header {
 		display: flex;
 		justify-content: space-between;
-		align-items: center;
+		align-items: flex-start;
 		gap: 1rem;
 		margin-bottom: 1rem;
 	}
@@ -257,15 +257,19 @@
 	}
 
 	.eyebrow {
-		margin: 0 0 0.25rem;
+		margin: 0 0 0.2rem;
 		text-transform: uppercase;
-		font-size: 0.75rem;
-		letter-spacing: 0.12em;
-		color: #6b7280;
+		font-size: 0.7rem;
+		letter-spacing: 0.14em;
+		color: #b85c38;
+		font-weight: 700;
 	}
 
 	h1 {
 		margin: 0;
+		font-size: 1.5rem;
+		font-weight: 700;
+		letter-spacing: -0.01em;
 	}
 
 	.stage-wrap {
@@ -276,8 +280,8 @@
 		width: 100%;
 		max-width: 100%;
 		overflow: hidden;
-		border-radius: 16px;
-		background: linear-gradient(135deg, #e5e7eb, #f8fafc);
+		border-radius: 14px;
+		background: #f2efe7;
 	}
 
 	.stage-wrap.editing .stage {
@@ -291,29 +295,38 @@
 	.print-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.4rem;
+		gap: 0.45rem;
 		border: 0;
 		border-radius: 999px;
-		padding: 0.7rem 1.4rem;
-		background: #111827;
+		padding: 0.7rem 1.5rem;
+		background: linear-gradient(135deg, #c26a3d, #b85c38);
 		color: white;
 		font-size: 0.85rem;
 		font-weight: 600;
+		letter-spacing: 0.01em;
 		cursor: pointer;
+		box-shadow: 0 2px 8px rgba(184, 92, 56, 0.35);
+		transition: transform 0.15s, box-shadow 0.15s;
 	}
 
 	.print-btn:hover:not(:disabled) {
-		background: #1f2937;
+		transform: translateY(-1px);
+		box-shadow: 0 4px 14px rgba(184, 92, 56, 0.4);
+	}
+
+	.print-btn:active:not(:disabled) {
+		transform: translateY(0);
 	}
 
 	.status {
 		margin: 0 0 0.75rem;
-		font-size: 0.9rem;
-		color: #4b5563;
+		font-size: 0.85rem;
+		color: #8b5a2b;
+		font-style: italic;
 	}
 
 	button:disabled {
-		opacity: 0.6;
+		opacity: 0.55;
 		cursor: progress;
 	}
 
@@ -321,13 +334,14 @@
 		position: absolute;
 		transform: translate(-50%, -100%);
 		z-index: 10;
-		background: #1e293b;
-		border-radius: 10px;
+		background: #2d2a26;
+		border-radius: 12px;
 		padding: 6px 8px;
-		box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+		box-shadow: 0 4px 24px rgba(45, 42, 38, 0.35);
 		display: grid;
 		gap: 4px;
 		pointer-events: auto;
+		border: 1px solid #4a4540;
 	}
 
 	.toolbar-row {
@@ -338,11 +352,11 @@
 
 	.tb-btn {
 		border: 0;
-		border-radius: 6px;
+		border-radius: 7px;
 		padding: 5px 10px;
 		min-height: 30px;
 		background: transparent;
-		color: #cbd5e1;
+		color: #d4cfc8;
 		font-size: 0.8rem;
 		font-weight: 500;
 		white-space: nowrap;
@@ -353,11 +367,12 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
+		transition: background 0.12s, color 0.12s;
 	}
 
 	.tb-btn:hover {
-		background: #334155;
-		color: #f1f5f9;
+		background: #3d3832;
+		color: #f5f0e9;
 	}
 
 	.tb-icon {
@@ -372,13 +387,18 @@
 	}
 
 	.tb-active {
-		background: #475569;
+		background: #b85c38;
+		color: #fff;
+	}
+
+	.tb-active:hover {
+		background: #c26a3d;
 		color: #fff;
 	}
 
 	.tb-label {
 		font-size: 0.75rem;
-		color: #94a3b8;
+		color: #a09888;
 		min-width: 22px;
 		text-align: center;
 		font-variant-numeric: tabular-nums;
@@ -387,61 +407,63 @@
 	.tb-sep {
 		width: 1px;
 		height: 20px;
-		background: #475569;
+		background: #4a4540;
 		margin: 0 3px;
 	}
 
 	.tb-del:hover {
-		background: #b91c1c;
+		background: #a4483b;
 		color: #fff;
 	}
 
 	.edit-input {
 		position: absolute;
 		z-index: 20;
-		border: 2px solid #3b82f6;
-		border-radius: 6px;
-		padding: 2px;
-		background: rgba(255, 255, 255, 0.95);
-		color: #111827;
+		border: 2px solid #b85c38;
+		border-radius: 7px;
+		padding: 3px 5px;
+		background: rgba(255, 254, 250, 0.97);
+		color: #3d2c20;
 		resize: none;
 		overflow: hidden;
 		line-height: 1.2;
 		outline: none;
 		box-sizing: border-box;
-		box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+		box-shadow: 0 4px 20px rgba(184, 92, 56, 0.25);
 	}
 
 	.mode-tabs {
 		display: flex;
-		border: 1px solid #e5e7eb;
+		border: 1px solid #e0d0bd;
 		border-radius: 999px;
 		overflow: hidden;
+		background: #fffdfa;
 	}
 
 	.mode-tab {
 		border: 0;
-		padding: 0.5rem 1.2rem;
-		font-size: 0.85rem;
-		font-weight: 500;
+		padding: 0.45rem 1.1rem;
+		font-size: 0.82rem;
+		font-weight: 600;
 		background: transparent;
-		color: #6b7280;
+		color: #8c7b6f;
 		cursor: pointer;
 		transition: background 0.15s, color 0.15s;
 	}
 
 	.mode-tab.active {
-		background: #111827;
-		color: white;
+		background: #3d2c20;
+		color: #fff;
 	}
 
 	.mode-tab:hover:not(.active) {
-		background: #f3f4f6;
+		background: #f5efe4;
+		color: #3d2c20;
 	}
 
 	@media (max-width: 900px) {
 		.canvas-card {
-			padding: 0.9rem;
+			padding: 1rem;
 			border-radius: 16px;
 		}
 
@@ -456,7 +478,7 @@
 			justify-content: stretch;
 		}
 
-		.actions button {
+		.actions .print-btn {
 			flex: 1 1 12rem;
 		}
 	}

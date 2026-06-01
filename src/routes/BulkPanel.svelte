@@ -1,7 +1,7 @@
 <script lang="ts">
 	const FONT_OPTIONS = [
-		{ label: 'Sans', value: 'Inter, system-ui, sans-serif' },
 		{ label: 'Serif', value: 'Georgia, "Times New Roman", serif' },
+		{ label: 'Sans', value: 'Inter, system-ui, sans-serif' },
 		{ label: 'Monospace', value: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }
 	] as const;
 
@@ -126,38 +126,42 @@
 	}
 
 	.bulk-label {
-		font-size: 0.8rem;
-		font-weight: 600;
-		color: #374151;
+		font-size: 0.72rem;
+		font-weight: 700;
+		color: #5c4a3a;
 		text-transform: uppercase;
-		letter-spacing: 0.04em;
+		letter-spacing: 0.06em;
 	}
 
 	.bulk-textarea {
 		width: 100%;
 		box-sizing: border-box;
-		border: 1px solid #d1d5db;
+		border: 1px solid #e0d0bd;
 		border-radius: 10px;
 		padding: 0.6rem 0.75rem;
-		font-family: Inter, system-ui, sans-serif;
 		font-size: 0.85rem;
 		resize: vertical;
 		min-height: 120px;
-		background: #fafafa;
-		color: #111827;
-		line-height: 1.5;
+		background: #fdfaf4;
+		color: #3d2c20;
+		line-height: 1.6;
+		transition: border-color 0.15s, box-shadow 0.15s;
+	}
+
+	.bulk-textarea::placeholder {
+		color: #b8a894;
 	}
 
 	.bulk-textarea:focus {
 		outline: none;
-		border-color: #6366f1;
-		box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+		border-color: #b85c38;
+		box-shadow: 0 0 0 3px rgba(184, 92, 56, 0.12);
 	}
 
 	.bulk-count {
 		margin: 0;
-		font-size: 0.8rem;
-		color: #6b7280;
+		font-size: 0.78rem;
+		color: #8c7b6f;
 		font-variant-numeric: tabular-nums;
 	}
 
@@ -168,40 +172,43 @@
 	}
 
 	.bulk-btn {
-		border: 1px solid #d1d5db;
+		border: 1px solid #e0d0bd;
 		border-radius: 8px;
 		padding: 0.4rem 0.75rem;
-		background: white;
-		color: #111827;
+		background: #fffdfa;
+		color: #3d2c20;
 		font-size: 0.85rem;
 		cursor: pointer;
 		min-width: 36px;
 		text-align: center;
+		transition: background 0.12s, border-color 0.12s;
 	}
 
 	.bulk-btn:hover:not(:disabled) {
-		background: #f3f4f6;
+		background: #f5efe4;
+		border-color: #d0c4b0;
 	}
 
 	.bulk-btn:disabled {
-		opacity: 0.4;
+		opacity: 0.35;
 		cursor: default;
 	}
 
 	.bulk-btn-active {
-		background: #111827;
-		color: white;
-		border-color: #111827;
+		background: #3d2c20;
+		color: #fff;
+		border-color: #3d2c20;
 	}
 
 	.bulk-btn-active:hover {
-		background: #1f2937;
+		background: #5c4230;
+		border-color: #5c4230;
 	}
 
 	.bulk-value {
 		font-size: 0.9rem;
-		font-weight: 600;
-		color: #111827;
+		font-weight: 700;
+		color: #3d2c20;
 		min-width: 36px;
 		text-align: center;
 		font-variant-numeric: tabular-nums;
@@ -209,23 +216,24 @@
 
 	.bulk-select {
 		width: 100%;
-		border: 1px solid #d1d5db;
+		border: 1px solid #e0d0bd;
 		border-radius: 10px;
 		padding: 0.5rem 0.75rem;
-		font-family: Inter, system-ui, sans-serif;
 		font-size: 0.85rem;
-		background: #fafafa;
-		color: #111827;
+		background: #fdfaf4;
+		color: #3d2c20;
 		cursor: pointer;
+		transition: border-color 0.15s, box-shadow 0.15s;
 	}
 
 	.bulk-select:focus {
 		outline: none;
-		border-color: #6366f1;
-		box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+		border-color: #b85c38;
+		box-shadow: 0 0 0 3px rgba(184, 92, 56, 0.12);
 	}
 
 	button {
 		cursor: pointer;
+		font-family: Georgia, "Times New Roman", serif;
 	}
 </style>

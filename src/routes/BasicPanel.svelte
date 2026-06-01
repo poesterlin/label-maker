@@ -36,13 +36,13 @@
 
 <style>
 	.instructions {
-		font-size: 0.8rem;
-		color: #6b7280;
-		line-height: 1.5;
-		padding: 0.5rem 0.75rem;
-		border: 1px solid #e5e7eb;
+		font-size: 0.78rem;
+		color: #8c7b6f;
+		line-height: 1.55;
+		padding: 0.6rem 0.8rem;
+		border: 1px solid #e8e0d5;
 		border-radius: 12px;
-		background: #f9fafb;
+		background: #fdfaf4;
 	}
 
 	.instructions p {
@@ -56,18 +56,32 @@
 	.primary {
 		border: 0;
 		border-radius: 999px;
-		padding: 0.8rem 1rem;
-		background: #111827;
-		color: white;
+		padding: 0.75rem 1rem;
+		background: #3d2c20;
+		color: #fff;
 		cursor: pointer;
+		font-size: 0.85rem;
+		font-weight: 600;
+		transition: background 0.15s;
+	}
+
+	.primary:hover {
+		background: #5c4230;
 	}
 
 	.item {
 		text-align: left;
 		padding: 0.8rem;
-		border-radius: 14px;
-		border: 1px solid #e5e7eb;
-		background: #fafafa;
+		border-radius: 12px;
+		border: 1px solid #e8e0d5;
+		background: #fffdfa;
+		cursor: pointer;
+		transition: border-color 0.15s, background 0.15s, transform 0.15s;
+	}
+
+	.item:hover {
+		border-color: #d0c4b0;
+		background: #fefaf4;
 	}
 
 	.item strong {
@@ -76,11 +90,12 @@
 	}
 
 	.item.selected {
-		border-color: #111827;
-		background: #eef2ff;
+		border-color: #b85c38;
+		background: #fdf3ea;
 	}
 
 	button {
 		cursor: pointer;
+		font-family: Georgia, "Times New Roman", serif;
 	}
 </style>
