@@ -4,23 +4,18 @@
 	import { page } from '$app/state';
 	import { onMount, untrack } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
+	import BasicPanel from './BasicPanel.svelte';
+	import BulkPanel from './BulkPanel.svelte';
+	import CanvasCard from './CanvasCard.svelte';
 
 	const BOARD_STORAGE_KEY = 'label-maker:board:v1';
 	const DESIGN_WIDTH = 900;
 	const DESIGN_HEIGHT = 520;
 	const DEFAULT_FONT_FAMILY = 'Inter, system-ui, sans-serif';
-	const FONT_OPTIONS = [
-		{ label: 'Sans', value: 'Inter, system-ui, sans-serif' },
-		{ label: 'Serif', value: 'Georgia, "Times New Roman", serif' },
-		{ label: 'Monospace', value: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace' }
-	] as const;
 	const DEFAULT_FONT_STYLE = 'normal';
-	const FONT_STYLE_OPTIONS = [
-		{ label: 'Regular', value: 'normal' },
-		{ label: 'Bold', value: 'bold' },
-		{ label: 'Italic', value: 'italic' },
-		{ label: 'Bold Italic', value: 'bold italic' }
-	] as const;
+	const DEFAULT_TEXT_ALIGN = 'left';
+	const DEFAULT_VERTICAL_ALIGN = 'top';
+	const DEFAULT_HEIGHT = 0;
 
 	type LabelItem = {
 		id: number;
@@ -32,6 +27,9 @@
 		fontStyle: string;
 		fill: string;
 		width: number;
+		height: number;
+		align: string;
+		verticalAlign: string;
 	};
 
 	let stageHost = $state<HTMLDivElement>();
@@ -47,7 +45,10 @@
 			fontFamily: DEFAULT_FONT_FAMILY,
 			fontStyle: DEFAULT_FONT_STYLE,
 			fill: '#111827',
-			width: 320
+			width: 320,
+			height: DEFAULT_HEIGHT,
+			align: DEFAULT_TEXT_ALIGN,
+			verticalAlign: DEFAULT_VERTICAL_ALIGN
 		},
 		{
 			id: 2,
@@ -58,7 +59,10 @@
 			fontFamily: DEFAULT_FONT_FAMILY,
 			fontStyle: DEFAULT_FONT_STYLE,
 			fill: '#374151',
-			width: 260
+			width: 260,
+			height: DEFAULT_HEIGHT,
+			align: DEFAULT_TEXT_ALIGN,
+			verticalAlign: DEFAULT_VERTICAL_ALIGN
 		}
 	]);
 
@@ -68,10 +72,44 @@
 	let transformer: Konva.Transformer | undefined;
 	let nodes = new SvelteMap<number, Konva.Text>();
 	let printerMessage = $state('');
-	let printerLogs = $state<string[]>([]);
 	let printing = $state(false);
 	let hasRestoredBoard = $state(false);
-	const pageTitle = 'Niimbot B1 Label Maker - Web Bluetooth Editor';
+	let toolbarX = $state(0);
+	let toolbarY = $state(0);
+	let toolbarVisible = $state(false);
+	let editingText = $state(false);
+	let editValue = $state('');
+	let editId = $state<number | null>(null);
+	let editX = $state(0);
+	let editY = $state(0);
+	let editWidth = $state(0);
+	let editHeight = $state(0);
+	let editFontSize = $state(0);
+	let editFontFamily = $state(DEFAULT_FONT_FAMILY);
+	let editFontStyle = $state(DEFAULT_FONT_STYLE);
+	let editAlign = $state(DEFAULT_TEXT_ALIGN);
+
+	let mode = $state<'basic' | 'bulk'>('basic');
+	let bulkList = $state('');
+	let bulkFontSize = $state(44);
+	let bulkFontFamily = $state(DEFAULT_FONT_FAMILY);
+	let bulkFontStyle = $state('bold');
+	let bulkAlign = $state<'left' | 'center' | 'right'>('center');
+	let bulkFill = $state('#111827');
+	let bulkPreviewIndex = $state(0);
+
+	let _savedBasicSelectedId = $state<number | null>(null);
+	let _savedBasicNextId = $state(3);
+	let _savedBasicItems = $state<LabelItem[]>([]);
+
+	const bulkLines = $derived(
+		bulkList
+			.split('\n\n')
+			.map((block) => block.trim())
+			.filter((block) => block.length > 0)
+	);
+
+	const pageTitle = 'Thermal Label Designer - Print with Niimbot B1 via Bluetooth';
 	const pageDescription =
 		'Create, edit, and print black-and-white labels for Niimbot B1 from your browser using Web Bluetooth. Position text, duplicate elements, and print instantly.';
 	const pageKeywords =
@@ -89,11 +127,6 @@
 		})
 	);
 
-	function pushPrinterLog(message: string) {
-		const time = new Date().toLocaleTimeString();
-		const entry = `${time} - ${message}`;
-		printerLogs = [...printerLogs.slice(-11), entry];
-	}
 
 	type PersistedBoard = {
 		selectedId: number | null;
@@ -101,9 +134,12 @@
 		nextId: number;
 	};
 
-	type PersistedLabelItem = Omit<LabelItem, 'fontFamily' | 'fontStyle'> & {
+	type PersistedLabelItem = Omit<LabelItem, 'fontFamily' | 'fontStyle' | 'align' | 'verticalAlign' | 'height'> & {
 		fontFamily?: string;
 		fontStyle?: string;
+		align?: string;
+		verticalAlign?: string;
+		height?: number;
 	};
 
 	function isRecord(value: unknown): value is Record<string, unknown> {
@@ -116,6 +152,12 @@
 			value.fontFamily === undefined || typeof value.fontFamily === 'string';
 		const hasValidFontStyle =
 			value.fontStyle === undefined || typeof value.fontStyle === 'string';
+		const hasValidAlign =
+			value.align === undefined || typeof value.align === 'string';
+		const hasValidVerticalAlign =
+			value.verticalAlign === undefined || typeof value.verticalAlign === 'string';
+		const hasValidHeight =
+			value.height === undefined || typeof value.height === 'number';
 
 		return (
 			typeof value.id === 'number' &&
@@ -125,6 +167,9 @@
 			typeof value.fontSize === 'number' &&
 			hasValidFontFamily &&
 			hasValidFontStyle &&
+			hasValidAlign &&
+			hasValidVerticalAlign &&
+			hasValidHeight &&
 			typeof value.fill === 'string' &&
 			typeof value.width === 'number'
 		);
@@ -134,7 +179,10 @@
 		return {
 			...item,
 			fontFamily: item.fontFamily ?? DEFAULT_FONT_FAMILY,
-			fontStyle: item.fontStyle ?? DEFAULT_FONT_STYLE
+			fontStyle: item.fontStyle ?? DEFAULT_FONT_STYLE,
+			align: item.align ?? DEFAULT_TEXT_ALIGN,
+			verticalAlign: item.verticalAlign ?? DEFAULT_VERTICAL_ALIGN,
+			height: item.height ?? DEFAULT_HEIGHT
 		};
 	}
 
@@ -157,7 +205,10 @@
 			fontFamily: DEFAULT_FONT_FAMILY,
 			fontStyle: DEFAULT_FONT_STYLE,
 			fill: '#111827',
-			width: 240
+			width: 240,
+			height: DEFAULT_HEIGHT,
+			align: DEFAULT_TEXT_ALIGN,
+			verticalAlign: DEFAULT_VERTICAL_ALIGN
 		};
 
 		items = [...items, item];
@@ -193,35 +244,138 @@
 		selectedId = duplicate.id;
 	}
 
+	function updateToolbarPosition() {
+		if (!stage || !stageHost || selectedId === null) {
+			untrack(() => {
+				toolbarVisible = false;
+			});
+			return;
+		}
+		const node = nodes.get(selectedId);
+		if (!node) {
+			untrack(() => {
+				toolbarVisible = false;
+			});
+			return;
+		}
+		const box = node.getClientRect();
+		const container = stage.container();
+		const containerRect = container.getBoundingClientRect();
+		const hostRect = stageHost.getBoundingClientRect();
+		const x = (containerRect.left - hostRect.left) + box.x + box.width / 2;
+		const y = (containerRect.top - hostRect.top) + box.y - 12;
+
+		untrack(() => {
+			toolbarX = x;
+			toolbarY = y;
+			toolbarVisible = true;
+			if (editingText && editId === selectedId) {
+				editX = (containerRect.left - hostRect.left) + box.x;
+				editY = (containerRect.top - hostRect.top) + box.y;
+				editWidth = box.width;
+				editHeight = box.height;
+			}
+		});
+	}
+
+	function deselect() {
+		selectedId = null;
+		toolbarVisible = false;
+		if (transformer) transformer.nodes([]);
+		layer?.batchDraw();
+	}
+
+	function handleKeydown(e: KeyboardEvent) {
+		if (editingText) return;
+		const target = e.target;
+		if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement) return;
+
+		if (e.key === 'Delete' || e.key === 'Backspace') {
+			e.preventDefault();
+			deleteSelected();
+		} else if (e.key === 'Escape') {
+			deselect();
+		} else if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+			e.preventDefault();
+			duplicateSelected();
+		}
+	}
+
+	function startEditing(item: LabelItem) {
+		editId = item.id;
+		editValue = item.text;
+		editFontSize = item.fontSize;
+		editFontFamily = item.fontFamily;
+		editFontStyle = item.fontStyle;
+		editAlign = item.align;
+		editingText = true;
+		updateToolbarPosition();
+	}
+
+	function commitEdit() {
+		if (editId === null) return;
+		updateItem(editId, { text: editValue });
+		editId = null;
+		editingText = false;
+	}
+
+	function focusOnMount(el: HTMLTextAreaElement) {
+		el.focus();
+	}
+
+	function toggleBold() {
+		if (selectedId === null) return;
+		const item = items.find((i) => i.id === selectedId);
+		if (!item) return;
+		const styles: Record<string, string> = {
+			normal: 'bold',
+			bold: 'normal',
+			italic: 'bold italic',
+			'bold italic': 'italic'
+		};
+		updateItem(selectedId, { fontStyle: styles[item.fontStyle] ?? 'bold' });
+	}
+
+	function toggleItalic() {
+		if (selectedId === null) return;
+		const item = items.find((i) => i.id === selectedId);
+		if (!item) return;
+		const styles: Record<string, string> = {
+			normal: 'italic',
+			italic: 'normal',
+			bold: 'bold italic',
+			'bold italic': 'bold'
+		};
+		updateItem(selectedId, { fontStyle: styles[item.fontStyle] ?? 'italic' });
+	}
+
+	function cycleFontSize(delta: number) {
+		if (selectedId === null) return;
+		const item = items.find((i) => i.id === selectedId);
+		if (!item) return;
+		const next = Math.max(12, Math.min(180, item.fontSize + delta));
+		updateItem(selectedId, { fontSize: next });
+	}
+
 	async function printCurrentLabel() {
 		if (!browser) return;
 		if (!stage) {
 			printerMessage = 'Label canvas is not ready yet.';
-			pushPrinterLog('Label canvas is not ready.');
 			return;
 		}
 
 		printing = true;
 		printerMessage = 'Connecting to printer...';
-		pushPrinterLog('Starting print for Niimbot B1.');
 
 		try {
 			const { printerService } = await import('$lib/niimbot');
 
 			await printerService.initialize();
-			pushPrinterLog('Web Bluetooth ready.');
-
-			if (!printerService.isConnected()) {
-				pushPrinterLog('Opening printer chooser...');
-			}
 
 			if (!printerService.isConnected() && !(await printerService.connect())) {
 				printerMessage = printerService.lastError ?? 'Could not connect to the printer.';
-				pushPrinterLog(printerMessage);
 				return;
 			}
-
-			pushPrinterLog('Connected to printer.');
 
 			const printerWidth = 384;
 			const frameNode = stage.findOne<Konva.Rect>('.board-frame');
@@ -234,7 +388,6 @@
 			let canvas: HTMLCanvasElement;
 
 			try {
-				pushPrinterLog('Preparing label image...');
 				frameNode?.visible(false);
 				transformer?.nodes([]);
 				stage.scale({ x: 1, y: 1 });
@@ -252,13 +405,120 @@
 				layer?.batchDraw();
 			}
 
-			pushPrinterLog('Sending label data...');
 			await printerService.printCanvasLabel(canvas);
 			printerMessage = 'Sent label to the printer.';
-			pushPrinterLog('Print job sent.');
 		} catch (error) {
 			printerMessage = error instanceof Error ? error.message : 'Printing failed.';
-			pushPrinterLog(`Print failed: ${printerMessage}`);
+		} finally {
+			printing = false;
+		}
+	}
+
+	function switchMode(newMode: 'basic' | 'bulk') {
+		if (newMode === mode) return;
+		if (mode === 'basic') {
+			_savedBasicSelectedId = selectedId;
+			_savedBasicNextId = nextId;
+			_savedBasicItems = items;
+			updateBulkPreview();
+		} else {
+			items = _savedBasicItems.length > 0 ? _savedBasicItems : items;
+			selectedId = _savedBasicSelectedId;
+			nextId = _savedBasicNextId;
+		}
+		mode = newMode;
+	}
+
+	function updateBulkPreview() {
+		const text = bulkLines[bulkPreviewIndex] || 'Label text';
+		const id = 1;
+		items = [{
+			id,
+			text,
+			x: 24,
+			y: 200,
+			fontSize: bulkFontSize,
+			fontFamily: bulkFontFamily,
+			fontStyle: bulkFontStyle,
+			fill: bulkFill,
+			width: 852,
+			height: DEFAULT_HEIGHT,
+			align: bulkAlign,
+			verticalAlign: 'middle'
+		}];
+		selectedId = id;
+		nextId = 2;
+	}
+
+	async function printBulkLabels() {
+		if (!browser) return;
+		if (!stage) {
+			printerMessage = 'Label canvas is not ready yet.';
+			return;
+		}
+
+		if (bulkLines.length === 0) {
+			printerMessage = 'No labels to print. Add some text to the list.';
+			return;
+		}
+
+		printing = true;
+
+		try {
+			const { printerService } = await import('$lib/niimbot');
+			await printerService.initialize();
+
+			if (!printerService.isConnected() && !(await printerService.connect())) {
+				printerMessage = printerService.lastError ?? 'Could not connect to the printer.';
+				return;
+			}
+
+			const printerWidth = 384;
+			const frameNode = stage.findOne<Konva.Rect>('.board-frame');
+			const frameWasVisible = frameNode?.visible() ?? false;
+			const selectedNodes = transformer?.nodes() ?? [];
+			const stageScaleX = stage.scaleX();
+			const stageScaleY = stage.scaleY();
+			const stageWidth = stage.width();
+			const stageHeight = stage.height();
+
+			const bulkNode = nodes.get(1);
+			const originalText = bulkNode?.text() ?? '';
+
+			try {
+				frameNode?.visible(false);
+				transformer?.nodes([]);
+				stage.scale({ x: 1, y: 1 });
+				stage.size({ width: DESIGN_WIDTH, height: DESIGN_HEIGHT });
+
+				for (let i = 0; i < bulkLines.length; i++) {
+					printerMessage = `Printing label ${i + 1} / ${bulkLines.length}...`;
+
+					if (bulkNode) {
+						bulkNode.text(bulkLines[i]);
+					}
+					layer?.batchDraw();
+
+					const canvas = stage.toCanvas({
+						pixelRatio: printerWidth / DESIGN_WIDTH
+					});
+
+					await printerService.printCanvasLabel(canvas);
+				}
+
+				printerMessage = `Printed ${bulkLines.length} labels.`;
+			} finally {
+				if (bulkNode) {
+					bulkNode.text(originalText);
+				}
+				frameNode?.visible(frameWasVisible);
+				transformer?.nodes(selectedNodes);
+				stage.scale({ x: stageScaleX, y: stageScaleY });
+				stage.size({ width: stageWidth, height: stageHeight });
+				layer?.batchDraw();
+			}
+		} catch (error) {
+			printerMessage = error instanceof Error ? error.message : 'Printing failed.';
 		} finally {
 			printing = false;
 		}
@@ -288,7 +548,7 @@
 	});
 
 	$effect(() => {
-		if (!browser || !hasRestoredBoard) return;
+		if (!browser || !hasRestoredBoard || mode !== 'basic') return;
 
 		const payload: PersistedBoard = {
 			selectedId,
@@ -315,7 +575,8 @@
 		layer = new Konva.Layer();
 		transformer = new Konva.Transformer({
 			rotateEnabled: false,
-			enabledAnchors: ['middle-left', 'middle-right']
+			keepRatio: false,
+			enabledAnchors: ['middle-left', 'middle-right', 'middle-top', 'middle-bottom']
 		});
 
 		const bg = new Konva.Rect({
@@ -345,6 +606,9 @@
 				fontFamily: item.fontFamily,
 				fontStyle: item.fontStyle,
 				width: item.width,
+				height: item.height > 0 ? item.height : undefined,
+				align: item.align,
+				verticalAlign: item.verticalAlign,
 				draggable: true,
 				padding: 2
 			});
@@ -355,21 +619,30 @@
 				transformer.nodes([node]);
 				layer?.batchDraw();
 			}
+			updateToolbarPosition();
 		});
 
 			node.on('dragmove', () => {
 				updateItem(item.id, { x: node.x(), y: node.y() });
+				updateToolbarPosition();
+			});
+
+			node.on('dblclick dbltap', () => {
+				startEditing(item);
 			});
 
 			node.on('transform', () => {
 				const scaleX = node.scaleX();
+				const scaleY = node.scaleY();
 				node.scaleX(1);
 				node.scaleY(1);
 				updateItem(item.id, {
 					x: node.x(),
 					y: node.y(),
-					width: Math.max(90, node.width() * scaleX)
+					width: Math.max(90, node.width() * scaleX),
+					height: node.height() > 0 ? Math.max(24, node.height() * scaleY) : node.height()
 				});
+				updateToolbarPosition();
 			});
 
 			nodes.set(item.id, node);
@@ -417,6 +690,9 @@
 					fontFamily: item.fontFamily,
 					fontStyle: item.fontStyle,
 					width: item.width,
+					height: item.height > 0 ? item.height : undefined,
+					align: item.align,
+					verticalAlign: item.verticalAlign,
 					draggable: true,
 					padding: 2
 				});
@@ -427,21 +703,30 @@
 						transformer.nodes([createdNode]);
 						layer?.batchDraw();
 					}
+					updateToolbarPosition();
 				});
 
 				createdNode.on('dragmove', () => {
 					updateItem(item.id, { x: createdNode.x(), y: createdNode.y() });
+					updateToolbarPosition();
+				});
+
+				createdNode.on('dblclick dbltap', () => {
+					startEditing(item);
 				});
 
 				createdNode.on('transform', () => {
 					const scaleX = createdNode.scaleX();
+					const scaleY = createdNode.scaleY();
 					createdNode.scaleX(1);
 					createdNode.scaleY(1);
 					updateItem(item.id, {
 						x: createdNode.x(),
 						y: createdNode.y(),
-						width: Math.max(90, createdNode.width() * scaleX)
+						width: Math.max(90, createdNode.width() * scaleX),
+						height: createdNode.height() > 0 ? Math.max(24, createdNode.height() * scaleY) : createdNode.height()
 					});
+					updateToolbarPosition();
 				});
 
 				nodes.set(item.id, createdNode);
@@ -458,6 +743,9 @@
 			node.fontStyle(item.fontStyle);
 			node.fill(item.fill);
 			node.width(item.width);
+			node.height(item.height > 0 ? item.height : undefined);
+			node.align(item.align);
+			node.verticalAlign(item.verticalAlign);
 		}
 
 		if (transformer) {
@@ -465,6 +753,7 @@
 			transformer.nodes(node ? [node] : []);
 		}
 		layer.batchDraw();
+		requestAnimationFrame(() => updateToolbarPosition());
 	});
 
 	$effect(() => {
@@ -478,6 +767,7 @@
 		});
 		stage.scale({ x: scale, y: scale });
 		layer.batchDraw();
+		requestAnimationFrame(() => updateToolbarPosition());
 	});
 </script>
 
@@ -493,83 +783,74 @@
 	<script type="application/ld+json">{pageJsonLd}</script>
 </svelte:head>
 
+<svelte:window onkeydown={handleKeydown} />
+
 <div class="shell">
-	<section class="canvas-card">
-		<div class="header">
-			<div>
-				<p class="eyebrow">Label Maker - Niimbot B1</p>
-				<h1>Basic label editor</h1>
-			</div>
-			<div class="actions">
-				<button class="secondary" onclick={printCurrentLabel} disabled={printing}>
-					{printing ? 'Printing...' : 'Print label'}
-				</button>
-			</div>
-		</div>
-		{#if printerMessage}
-			<p class="status">{printerMessage}</p>
-		{/if}
-		{#if printerLogs.length > 0}
-			<div class="log-panel">
-				<p class="log-title">Print log</p>
-				<ul class="log-list">
-					{#each printerLogs as log, index (`${index}-${log}`)}
-						<li>{log}</li>
-					{/each}
-				</ul>
-			</div>
-		{/if}
-		<div class="stage" bind:this={stageHost} bind:clientWidth={stageHostWidth}></div>
-	</section>
+	<CanvasCard
+		{mode}
+		{printing}
+		{printerMessage}
+		{editingText}
+		bind:stageHostWidth
+		{selectedId}
+		{items}
+		{toolbarVisible}
+		{toolbarX}
+		{toolbarY}
+		{editId}
+		bind:editValue
+		{editFontSize}
+		{editFontFamily}
+		{editFontStyle}
+		{editAlign}
+		{editX}
+		{editY}
+		{editWidth}
+		{editHeight}
+		stageScale={stage?.scaleX() ?? 1}
+		{bulkLines}
+		onStageHost={(el) => (stageHost = el)}
+		onSwitchMode={switchMode}
+		onPrintCurrentLabel={printCurrentLabel}
+		onPrintBulkLabels={printBulkLabels}
+		onStartEditing={startEditing}
+		onCommitEdit={commitEdit}
+		onCycleFontSize={cycleFontSize}
+		onToggleBold={toggleBold}
+		onToggleItalic={toggleItalic}
+		onUpdateItem={updateItem}
+		onDeleteSelected={deleteSelected}
+		onFocusMount={focusOnMount}
+	/>
 
 	<aside class="panel">
-		<h2>Properties</h2>
-		<button class="primary" onclick={addText}>Add text</button>
-		{#each items as item (item.id)}
-			<button class:selected={selectedId === item.id} class="item" onclick={() => (selectedId = item.id)}>
-				<strong>{item.text}</strong>
-				<span>{Math.round(item.x)}, {Math.round(item.y)}</span>
-			</button>
-		{/each}
-		{#if selectedId}
-			{@const selected = items.find((item) => item.id === selectedId)}
-			{#if selected}
-				<label>
-					<span>Text</span>
-					<input value={selected.text} oninput={(e) => updateItem(selected.id, { text: e.currentTarget.value })} />
-				</label>
-				<label>
-					<span>Size</span>
-					<input type="range" min="12" max="180" value={selected.fontSize} oninput={(e) => updateItem(selected.id, { fontSize: Number(e.currentTarget.value) })} />
-				</label>
-				<label>
-					<span>Font</span>
-					<select
-						value={selected.fontFamily}
-						onchange={(e) => updateItem(selected.id, { fontFamily: e.currentTarget.value })}
-					>
-						{#each FONT_OPTIONS as option (option.value)}
-							<option value={option.value}>{option.label}</option>
-						{/each}
-					</select>
-				</label>
-				<label>
-					<span>Style</span>
-					<select
-						value={selected.fontStyle}
-						onchange={(e) => updateItem(selected.id, { fontStyle: e.currentTarget.value })}
-					>
-						{#each FONT_STYLE_OPTIONS as option (option.value)}
-							<option value={option.value}>{option.label}</option>
-						{/each}
-					</select>
-				</label>
-			<div class="panel-actions">
-				<button class="ghost" onclick={duplicateSelected}>Duplicate element</button>
-				<button class="danger" onclick={deleteSelected}>Delete element</button>
-			</div>
+		{#if mode === 'basic'}
+			<BasicPanel {items} {selectedId} onAddText={addText} onSelectItem={(id) => (selectedId = id)} />
+		{:else}
+			<BulkPanel
+				{bulkList}
+				{bulkFontSize}
+				{bulkFontFamily}
+				{bulkFontStyle}
+				{bulkAlign}
+				{bulkLines}
+				{bulkPreviewIndex}
+				onBulkListChange={(v) => (bulkList = v)}
+				onBulkFontSizeChange={(s) => (bulkFontSize = s)}
+				onBulkFontFamilyChange={(f) => (bulkFontFamily = f)}
+				onBulkFontStyleChange={(s) => (bulkFontStyle = s)}
+				onBulkAlignChange={(a) => (bulkAlign = a)}
+				onUpdatePreview={updateBulkPreview}
+				onSetPreviewIndex={(i) => (bulkPreviewIndex = i)}
+			/>
 		{/if}
-	{/if}
+		<div class="printer-info">
+			<p class="printer-info-title">Printer — Niimbot B1</p>
+			<p class="printer-info-text">
+				Works with Chrome or Edge on desktop. Click <strong>Print label</strong> and select your printer via the Bluetooth device chooser.
+			</p>
+			<a class="printer-link" href="https://www.amazon.de/NIIMBOT-Etikettendrucker-Bluetooth-Etikettendrucker-Thermoetikettierer-Einzelhandel/dp/B0BCW4YMR8?th=1" target="_blank" rel="noopener noreferrer">Get a Niimbot B1</a>
+		</div>
 	</aside>
 </div>
 
@@ -583,180 +864,58 @@
 
 	.shell {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) 300px;
+		grid-template-columns: minmax(0, 1fr) 260px;
 		gap: 1rem;
 		padding: 1rem;
 		min-height: 100vh;
 		box-sizing: border-box;
 	}
 
-	.canvas-card, .panel {
+	.panel {
 		background: white;
 		border: 1px solid #e5e7eb;
 		border-radius: 20px;
 		padding: 1rem;
 		min-width: 0;
 		box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
-	}
-
-	.header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 1rem;
-		margin-bottom: 1rem;
-	}
-
-	.actions {
-		display: flex;
-		gap: 0.75rem;
-		align-items: center;
-		flex-wrap: wrap;
-		justify-content: flex-end;
-	}
-
-	.eyebrow {
-		margin: 0 0 0.25rem;
-		text-transform: uppercase;
-		font-size: 0.75rem;
-		letter-spacing: 0.12em;
-		color: #6b7280;
-	}
-
-	h1, h2 {
-		margin: 0;
-	}
-
-	.stage {
-		width: 100%;
-		max-width: 100%;
-		overflow: hidden;
-		border-radius: 16px;
-		background: linear-gradient(135deg, #e5e7eb, #f8fafc);
-	}
-
-	.panel {
 		display: grid;
 		gap: 0.9rem;
 		align-content: start;
 	}
 
-	label {
-		display: grid;
-		gap: 0.35rem;
-		font-size: 0.9rem;
-	}
-
-	input, select, button {
-		font: inherit;
-		min-height: 44px;
-	}
-
-	input,
-	select {
-		padding: 0.7rem 0.8rem;
-		border: 1px solid #d1d5db;
-		border-radius: 12px;
-		background: white;
-	}
-
-	.primary {
-		border: 0;
-		border-radius: 999px;
-		padding: 0.8rem 1rem;
-		background: #111827;
-		color: white;
-	}
-
-	.secondary {
-		border: 1px solid #cbd5e1;
-		border-radius: 999px;
-		padding: 0.8rem 1rem;
-		background: white;
-		color: #111827;
-	}
-
-	.ghost {
-		border: 1px solid #d1d5db;
-		border-radius: 12px;
-		padding: 0.8rem 1rem;
-		background: #f9fafb;
-		color: #1f2937;
-	}
-
-	.status {
-		margin: 0 0 0.75rem;
-		font-size: 0.9rem;
-		color: #4b5563;
-	}
-
-	.log-panel {
-		margin: 0 0 0.75rem;
-		padding: 0.7rem 0.8rem;
+	.printer-info {
+		margin-top: 0.2rem;
+		padding: 0.75rem;
 		border: 1px solid #e5e7eb;
 		border-radius: 12px;
-		background: #f9fafb;
+		background: #f0f9ff;
 	}
 
-	.log-title {
+	.printer-info-title {
 		margin: 0 0 0.35rem;
-		font-size: 0.8rem;
+		font-size: 0.75rem;
 		font-weight: 600;
 		color: #374151;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 	}
 
-	.log-list {
-		margin: 0;
-		padding: 0 0 0 1rem;
-		font-size: 0.85rem;
-		color: #4b5563;
-		display: grid;
-		gap: 0.2rem;
-	}
-
-	button:disabled {
-		opacity: 0.6;
-		cursor: progress;
-	}
-
-	.danger {
-		border: 1px solid #fecaca;
-		border-radius: 12px;
-		padding: 0.8rem 1rem;
-		background: #fef2f2;
-		color: #991b1b;
-	}
-
-	.item {
-		text-align: left;
-		padding: 0.8rem;
-		border-radius: 14px;
-		border: 1px solid #e5e7eb;
-		background: #fafafa;
-	}
-
-	.item strong {
-		display: block;
-		overflow-wrap: anywhere;
-	}
-
-	.item.selected {
-		border-color: #111827;
-		background: #eef2ff;
-	}
-
-	.item span {
-		display: block;
+	.printer-info-text {
+		margin: 0 0 0.5rem;
 		font-size: 0.8rem;
-		color: #6b7280;
+		color: #4b5563;
+		line-height: 1.45;
 	}
 
-	.panel-actions {
-		display: grid;
-		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.6rem;
+	.printer-link {
+		font-size: 0.8rem;
+		color: #2563eb;
+		text-decoration: none;
+		font-weight: 500;
+	}
+
+	.printer-link:hover {
+		text-decoration: underline;
 	}
 
 	@media (max-width: 900px) {
@@ -766,33 +925,10 @@
 			gap: 0.75rem;
 		}
 
-		.canvas-card,
 		.panel {
 			padding: 0.9rem;
 			border-radius: 16px;
-		}
-
-		.header {
-			flex-direction: column;
-			align-items: stretch;
 			gap: 0.75rem;
-		}
-
-		.actions {
-			width: 100%;
-			justify-content: stretch;
-		}
-
-		.actions button {
-			flex: 1 1 12rem;
-		}
-
-		.panel {
-			gap: 0.75rem;
-		}
-
-		.panel-actions {
-			grid-template-columns: 1fr;
 		}
 	}
 </style>
